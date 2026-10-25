@@ -1,0 +1,43 @@
+name: verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: mel0k1/Qulogi
+          path: qulogi
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: qulogi/go.mod
+      - name: Build qulogicat
+        run: go build -o qulogicat ./cmd/qulogicat
+        working-directory: qulogi
+      - name: Verify published catalog signature
+        run: ./qulogicat -verify -in ../catalog.json -pub 3waP7rtqdJzSUWXV3HO1QXcs0kpP4SGYOWektwMsJsM=
+        working-directory: qulogi
+      - name: Validate relay source list
+        run: |
+          python3 - <<'PY'
+          import json
+          data = json.load(open('relays.json'))
+          ids = set()
+          for relay in data['relays']:
+              assert relay.get('id'), 'relay without id'
+              assert relay['id'] not in ids, f'duplicate id {relay["id"]}'
+              ids.add(relay['id'])
+              assert relay.get('transports'), f'relay {relay["id"]} has no transports'
+              for t in relay['transports']:
+                  assert t.get('type') and t.get('addr'), f'bad transport in {relay["id"]}'
+          print(f'relays.json ok: {len(ids)} relays')
+          PY
